@@ -43,8 +43,9 @@ No failing tests were counted as passing. Initial image findings were patched an
 
 ## Explicitly not verified / not complete externally
 
-- No remote Git repository was provided; no hosted GitHub Actions run, GHCR publication, or remote
-  deployment was performed. Workflow syntax and local components were tested. Do not call hosted CI green.
+- The repository is [on GitHub](https://github.com/Bharathkondur/power-grid-ai-platform).
+  Hosted CI status is recorded by the [CI workflow](https://github.com/Bharathkondur/power-grid-ai-platform/actions/workflows/ci.yml);
+  this dated local evidence record does not independently verify GHCR publication or remote deployment.
 - ENTSO-E requires a token; its adapter and missing-credential behavior are implemented, but no live
   credentialed API request was performed.
 - Optional S3 snapshot upload has code/configuration but no provisioned-bucket integration evidence.
@@ -54,6 +55,6 @@ No failing tests were counted as passing. Initial image findings were patched an
 - Git SHA capture supports committed checkouts and image build metadata; early bootstrap runs correctly
   record `uncommitted`. A source commit is not fabricated retroactively.
 
-The local end-to-end implementation is runnable and demonstrated. The original request's strict
-hosted CI/cloud-related definition of done remains pending those external inputs. CV claims should
-be limited to the functionality and local deployment scope evidenced here.
+The local end-to-end implementation is runnable and demonstrated. Hosted CI should be assessed from
+the linked workflow; cloud deployment remains pending external infrastructure and credentials. CV
+claims should be limited to the functionality and deployment scope evidenced here.

@@ -61,7 +61,7 @@ def main():
         ],
         "rollback_demo": json.loads(Path("runtime/rollback-evidence.json").read_text()),
         "retraining_demo": json.loads(Path("runtime/retraining-evidence.json").read_text()),
-        "hosted_ci": "not_run_no_remote_repository",
+        "hosted_ci": "see_github_actions_workflow",
         "s3": "not_provisioned",
         "entsoe": "not_run_no_token",
         "tls": "not_demonstrated_local_plaintext",

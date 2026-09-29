@@ -206,8 +206,10 @@ uv run pip-audit --local --skip-editable
 Tests cover validation, source outages, freshness, DST, leakage, chronological splits, real MLflow
 registration/loading, gates/rollback, API schemas, MQTT buffering, PSI and delayed-label joins.
 GitHub workflows implement lint/tests/audit/build/Trivy, Compose/kind test deployment, recovery,
-SHA-tagged image publishing, test-before-demo deployment and controlled training. **Hosted CI and
-remote deployment have not run: no remote repository or credentials were provided.**
+SHA-tagged image publishing, test-before-demo deployment and controlled training. The repository is
+[on GitHub](https://github.com/Bharathkondur/power-grid-ai-platform); consult the
+[CI workflow](https://github.com/Bharathkondur/power-grid-ai-platform/actions/workflows/ci.yml)
+for the current hosted result. Remote deployment requires a configured target environment.
 
 All dependencies are hash-locked; base images are digest-pinned. `.env` is ignored, containers run
 non-root and Kubernetes references external Secrets. API pods have a read-only filesystem and drop
@@ -251,6 +253,6 @@ migrations/retention, complete node monitoring or remote authenticated TLS is cl
 training/serving image is larger than a serving-only image. Price/renewable models are deferred.
 
 Next work: longer rolling backtests, regional archived weather forecasts, a smaller serving image,
-separate database/registry roles, transactional promotion coordination and a real hosted CI run after
-configuring a remote. Expand forecasting targets only after those foundations are demonstrated.
+separate database/registry roles and transactional promotion coordination. Expand forecasting
+targets only after those foundations are demonstrated.
 

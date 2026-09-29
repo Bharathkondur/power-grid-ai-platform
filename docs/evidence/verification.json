@@ -116,7 +116,7 @@
       "previous": "2"
     }
   },
-  "hosted_ci": "not_run_no_remote_repository",
+  "hosted_ci": "see_github_actions_workflow",
   "s3": "not_provisioned",
   "entsoe": "not_run_no_token",
   "tls": "not_demonstrated_local_plaintext"

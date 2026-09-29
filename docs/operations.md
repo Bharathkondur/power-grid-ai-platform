@@ -188,5 +188,6 @@ configured `demo` GitHub environment. It requires KUBE_CONFIG_BASE64, a pre-prov
 both target namespaces, image-pull access, and MLFLOW_URI/MQTT_HOST variables. Restrict the deploy
 environment and only select a passing CI image SHA. `retrain.yml` requires registry/DB/API access.
 
-No remote repository or CI runner was supplied with this workspace. Local equivalents are tested;
-an actual hosted GitHub Actions run and remote deployment must not be claimed until configured.
+The repository is [on GitHub](https://github.com/Bharathkondur/power-grid-ai-platform).
+Check the [hosted CI workflow](https://github.com/Bharathkondur/power-grid-ai-platform/actions/workflows/ci.yml)
+for its current result. The `demo` environment and remote deployment remain unconfigured.
