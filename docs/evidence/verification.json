@@ -1,0 +1,123 @@
+{
+  "captured_at": "2026-09-26T20:22:46.417596+00:00",
+  "scope": "local personal project",
+  "tests": {
+    "tests": "35",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "26.572"
+  },
+  "dependency_vulnerabilities": 0,
+  "image_scan_policy": "Trivy HIGH/CRITICAL, ignore-unfixed, vulnerability scanner",
+  "image_findings": 0,
+  "scanned_image": "gridpulse-ai:0.1.0",
+  "image_id": "sha256:c3e0079552281212c22be3fad515384a7c96f0f727b501b6a95373f015e0eb1f",
+  "scrapes": [
+    {
+      "job": "gridpulse-api",
+      "health": "up",
+      "last_error": ""
+    },
+    {
+      "job": "gridpulse-kubernetes",
+      "health": "up",
+      "last_error": ""
+    },
+    {
+      "job": "kube-state-metrics",
+      "health": "up",
+      "last_error": ""
+    },
+    {
+      "job": "prometheus",
+      "health": "up",
+      "last_error": ""
+    }
+  ],
+  "compose_api": {
+    "status": "ready",
+    "model_version": "1"
+  },
+  "kubernetes_api": {
+    "status": "ready",
+    "model_version": "1"
+  },
+  "pods": [
+    {
+      "name": "gridpulse-api-68774f469-m6jv6",
+      "containers": [
+        {
+          "name": "api",
+          "ready": true,
+          "restarts": 1
+        }
+      ]
+    },
+    {
+      "name": "gridpulse-ingestion-7c5c57bddf-s5wp4",
+      "containers": [
+        {
+          "name": "ingestion",
+          "ready": true,
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "name": "gridpulse-kube-state-metrics-74f9dd6fcc-5sb4r",
+      "containers": [
+        {
+          "name": "metrics",
+          "ready": true,
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "name": "gridpulse-monitor-29840895-fn8n5",
+      "containers": [
+        {
+          "name": "monitor",
+          "ready": false,
+          "restarts": 0
+        }
+      ]
+    },
+    {
+      "name": "gridpulse-monitor-29840900-slpn6",
+      "containers": [
+        {
+          "name": "monitor",
+          "ready": false,
+          "restarts": 0
+        }
+      ]
+    }
+  ],
+  "rollback_demo": {
+    "candidate": "3",
+    "rejection": {
+      "accepted": false,
+      "version": "3",
+      "reasons": [
+        "Validation MAE exceeds configured limit"
+      ]
+    },
+    "restored": "2"
+  },
+  "retraining_demo": {
+    "trigger": "scheduled",
+    "trained": true,
+    "model_version": "4",
+    "promotion": {
+      "accepted": true,
+      "version": "4",
+      "previous": "2"
+    }
+  },
+  "hosted_ci": "not_run_no_remote_repository",
+  "s3": "not_provisioned",
+  "entsoe": "not_run_no_token",
+  "tls": "not_demonstrated_local_plaintext"
+}

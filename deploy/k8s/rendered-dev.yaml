@@ -1,0 +1,227 @@
+---
+# Source: gridpulse/templates/kube-state-metrics.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gridpulse-kube-state-metrics
+---
+# Source: gridpulse/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gridpulse-config
+data:
+  GRIDPULSE_DATA_SOURCE: "synthetic"
+  GRIDPULSE_ENV: "demo"
+  GRIDPULSE_MLFLOW_URI: "http://host.docker.internal:5000"
+  GRIDPULSE_MODEL_ALIAS: "champion"
+  GRIDPULSE_MODEL_NAME: "gridpulse-de-demand"
+  GRIDPULSE_MODEL_REFRESH_SECONDS: "5"
+  GRIDPULSE_MQTT_HOST: "host.docker.internal"
+  GRIDPULSE_MQTT_PORT: "1883"
+  GRIDPULSE_RUNTIME: "/app/runtime"
+  MLFLOW_DISABLE_AGENT_HINT: "1"
+---
+# Source: gridpulse/templates/kube-state-metrics.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: gridpulse-kube-state-metrics
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [list, watch]
+---
+# Source: gridpulse/templates/kube-state-metrics.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gridpulse-kube-state-metrics
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: gridpulse-kube-state-metrics
+subjects:
+  - kind: ServiceAccount
+    name: gridpulse-kube-state-metrics
+    namespace: gridpulse
+---
+# Source: gridpulse/templates/deployment.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: gridpulse-api
+spec:
+  type: NodePort
+  selector: {app: gridpulse-api}
+  ports:
+    - port: 8000
+      targetPort: http
+      nodePort: 30000
+---
+# Source: gridpulse/templates/kube-state-metrics.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: gridpulse-kube-state-metrics
+spec:
+  type: NodePort
+  selector: {app: gridpulse-kube-state-metrics}
+  ports: [{port: 8080, targetPort: http, nodePort: 30080}]
+---
+# Source: gridpulse/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gridpulse-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: gridpulse-api}
+  template:
+    metadata:
+      labels: {app: gridpulse-api}
+      annotations:
+        checksum/config: 11f4da94b8441c72f34a201727db2e13eb31ec50f733cf2b1ee69195e4315b6e
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001}
+      containers:
+        - name: api
+          image: "gridpulse-ai:0.1.0"
+          imagePullPolicy: IfNotPresent
+          ports: [{name: http, containerPort: 8000}]
+          envFrom:
+            - configMapRef: {name: gridpulse-config}
+            - secretRef: {name: gridpulse-secrets}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+            seccompProfile: {type: RuntimeDefault}
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          startupProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: {path: /ready, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 4
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - {name: runtime, mountPath: /app/runtime}
+            - {name: tmp, mountPath: /tmp}
+            - {name: home, mountPath: /home/gridpulse}
+      volumes:
+        - {name: runtime, emptyDir: {}}
+        - {name: tmp, emptyDir: {}}
+        - {name: home, emptyDir: {}}
+---
+# Source: gridpulse/templates/ingestion.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gridpulse-ingestion
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: gridpulse-ingestion}
+  template:
+    metadata:
+      labels: {app: gridpulse-ingestion}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001}
+      containers:
+        - name: ingestion
+          image: "gridpulse-ai:0.1.0"
+          imagePullPolicy: IfNotPresent
+          command: [gridpulse, mqtt, subscribe]
+          envFrom:
+            - configMapRef: {name: gridpulse-config}
+            - secretRef: {name: gridpulse-secrets}
+          env:
+            - name: GRIDPULSE_MQTT_CLIENT_ID
+              value: gridpulse-k8s-ingestion
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          volumeMounts: [{name: runtime, mountPath: /app/runtime}]
+      volumes: [{name: runtime, emptyDir: {}}]
+---
+# Source: gridpulse/templates/kube-state-metrics.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gridpulse-kube-state-metrics
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: gridpulse-kube-state-metrics}
+  template:
+    metadata:
+      labels: {app: gridpulse-kube-state-metrics}
+    spec:
+      serviceAccountName: gridpulse-kube-state-metrics
+      securityContext: {runAsNonRoot: true, runAsUser: 65534}
+      containers:
+        - name: metrics
+          image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.16.0
+          args: ["--resources=pods", "--namespaces=gridpulse"]
+          ports: [{name: http, containerPort: 8080}]
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+          livenessProbe: {httpGet: {path: /livez, port: 8080}}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+---
+# Source: gridpulse/templates/cronjobs.yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: gridpulse-monitor
+spec:
+  schedule: "*/5 * * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001}
+          containers:
+            - name: monitor
+              image: "gridpulse-ai:0.1.0"
+              command: [gridpulse, monitor]
+              envFrom:
+                - configMapRef: {name: gridpulse-config}
+                - secretRef: {name: gridpulse-secrets}
+              securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+              resources:
+                requests: {cpu: 200m, memory: 512Mi}
+                limits: {cpu: "2", memory: 2Gi}
+              volumeMounts: [{name: runtime, mountPath: /app/runtime}]
+          volumes: [{name: runtime, emptyDir: {}}]

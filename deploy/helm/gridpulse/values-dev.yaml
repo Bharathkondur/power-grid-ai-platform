@@ -1,0 +1,9 @@
+replicaCount: 1
+service:
+  type: NodePort
+  nodePort: 30000
+kubeStateMetrics:
+  enabled: true
+# Compose's scheduler is the single promotion controller in the local demo.
+retraining:
+  enabled: false

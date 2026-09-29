@@ -1,0 +1,23 @@
+groups:
+  - name: gridpulse
+    rules:
+      - alert: GridPulseUnavailable
+        expr: up{job="gridpulse-api"} == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations: {summary: "GridPulse API cannot be scraped"}
+      - alert: GridPulseErrors
+        expr: sum(rate(gridpulse_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(gridpulse_requests_total[5m])), 0.001) > 0.05
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "API error ratio exceeds 5 percent"}
+      - alert: GridPulseQualityReview
+        expr: gridpulse_retrain_requested == 1
+        for: 1m
+        labels: {severity: warning}
+        annotations: {summary: "Feature drift or delayed-label degradation requested retraining"}
+      - alert: GridPulseTelemetryStale
+        expr: gridpulse_telemetry_stale == 1
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "MQTT observations are absent or stale"}

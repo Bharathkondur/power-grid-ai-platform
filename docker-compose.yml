@@ -1,0 +1,135 @@
+name: gridpulse
+x-app: &app
+  image: gridpulse-ai:0.1.0
+  build:
+    context: .
+    dockerfile: deploy/docker/Dockerfile
+  environment: &environment
+    GRIDPULSE_ENV: demo
+    GRIDPULSE_DATABASE_URL: postgresql+psycopg://gridpulse:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/gridpulse
+    GRIDPULSE_MLFLOW_URI: http://mlflow:5000
+    GRIDPULSE_DATA_SOURCE: synthetic
+    GRIDPULSE_MQTT_HOST: mqtt
+    MLFLOW_DISABLE_AGENT_HINT: "1"
+  volumes:
+    - runtime:/app/runtime
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16.9-alpine
+    environment:
+      POSTGRES_USER: gridpulse
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: gridpulse
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U gridpulse -d gridpulse"]
+      interval: 5s
+      retries: 20
+    ports: ["127.0.0.1:5432:5432"]
+    restart: unless-stopped
+
+  mlflow:
+    <<: *app
+    environment:
+      MLFLOW_DISABLE_AGENT_HINT: "1"
+    command:
+      - mlflow
+      - server
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+      - --backend-store-uri
+      - postgresql+psycopg://gridpulse:${POSTGRES_PASSWORD}@postgres:5432/gridpulse
+      - --artifacts-destination
+      - /app/mlartifacts
+      - --serve-artifacts
+      - --allowed-hosts
+      - ${MLFLOW_ALLOWED_HOSTS:-mlflow:5000,localhost:5000,127.0.0.1:5000,host.docker.internal:5000}
+    volumes: ["artifacts:/app/mlartifacts"]
+    ports: ["127.0.0.1:5000:5000"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 5s
+      start_period: 30s
+      retries: 30
+
+  bootstrap:
+    <<: *app
+    command: [python, -m, pipelines.training.bootstrap]
+    restart: "no"
+    healthcheck: {disable: true}
+    depends_on:
+      mlflow: {condition: service_healthy}
+
+  api:
+    <<: *app
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on:
+      bootstrap: {condition: service_completed_successfully}
+
+  mqtt:
+    image: eclipse-mosquitto:2.0.22
+    volumes:
+      - ./deploy/docker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mqtt:/mosquitto/data
+    ports: ["127.0.0.1:1883:1883"]
+    restart: unless-stopped
+
+  ingestion:
+    <<: *app
+    command: [gridpulse, mqtt, subscribe]
+    healthcheck: {disable: true}
+    depends_on:
+      postgres: {condition: service_healthy}
+      bootstrap: {condition: service_completed_successfully}
+      mqtt: {condition: service_started}
+
+  simulator:
+    <<: *app
+    command: [gridpulse, mqtt, publish]
+    healthcheck: {disable: true}
+    depends_on:
+      mqtt: {condition: service_started}
+
+  monitor:
+    <<: *app
+    command: [python, -m, pipelines.retraining.scheduler]
+    healthcheck: {disable: true}
+    depends_on:
+      bootstrap: {condition: service_completed_successfully}
+
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus:/prometheus
+    ports: ["127.0.0.1:9090:9090"]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.0.2
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?Set GRAFANA_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana:/var/lib/grafana
+    ports: ["127.0.0.1:3000:3000"]
+    restart: unless-stopped
+
+volumes:
+  postgres:
+  runtime:
+  artifacts:
+  mqtt:
+  prometheus:
+  grafana:

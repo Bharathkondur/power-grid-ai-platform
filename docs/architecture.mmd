@@ -1,0 +1,29 @@
+flowchart TB
+  subgraph sources[Inputs — Germany demand]
+    OPSD[OPSD fixed release / ENTSO-E token API]
+    METEO[Open-Meteo historical weather]
+    SYN[Synthetic demo — explicitly labeled]
+    MQTT[Device simulator → MQTT broker]
+  end
+  OPSD & METEO & SYN --> ING[Acquisition + UTC normalization]
+  ING --> VALID[Schema / gaps / duplicates / freshness validation]
+  MQTT --> TV[Telemetry validation + QoS1 acknowledgement]
+  VALID --> DB[(PostgreSQL observations)]
+  TV --> TDB[(PostgreSQL telemetry — separate kW stream)]
+  VALID --> RAW[(Immutable files / optional S3 snapshots)]
+  DB --> FEATURES[Shared origin-safe direct 24-hour features]
+  FEATURES --> TRAIN[XGBoost + weekly baseline / chronological validation]
+  TRAIN --> MLFLOW[MLflow runs, artifacts, metrics and registry]
+  MLFLOW --> GATE[Validation thresholds + reloaded artifact smoke test]
+  GATE -->|accepted| ALIAS[Staging → champion / retain previous]
+  GATE -->|rejected| RETAIN[Keep existing champion]
+  ALIAS --> API[FastAPI / Docker / Kubernetes / Helm]
+  API --> PRED[(PostgreSQL predictions + features)]
+  API --> PROM[Prometheus / Grafana / alerts]
+  PRED & DB --> QUALITY[PSI drift + delayed-label MAE / RMSE]
+  QUALITY --> PROM
+  QUALITY -->|quality policy| RETRAIN[Controlled retraining]
+  SCHEDULE[Weekly schedule] --> RETRAIN
+  RETRAIN --> FEATURES
+  API -->|post-deployment check fails| ROLLBACK[Restore previous registry alias / Helm revision]
+  ROLLBACK --> API

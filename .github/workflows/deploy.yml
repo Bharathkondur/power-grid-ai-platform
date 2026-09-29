@@ -1,0 +1,48 @@
+name: Deploy verified image to demo
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Commit SHA tag published by a passing CI run
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: gridpulse-demo-deployment
+  cancel-in-progress: false
+jobs:
+  deploy:
+    environment: demo
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4.3.0
+        with: {version: v3.18.3}
+      - name: Configure cluster credentials
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG_BASE64 }}
+        run: |
+          mkdir -p ~/.kube
+          printf '%s' "$KUBE_CONFIG" | base64 --decode > ~/.kube/config
+          chmod 600 ~/.kube/config
+      - name: Deploy to test, smoke, then demo; rollback on smoke failure
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          MLFLOW_URI: ${{ vars.MLFLOW_URI }}
+          MQTT_HOST: ${{ vars.MQTT_HOST }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_TAG" =~ ^[a-f0-9]{40}$ ]] || { echo "A full commit SHA is required"; exit 1; }
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          for namespace in gridpulse-test gridpulse-demo; do
+            previous=$(helm history gridpulse -n "$namespace" -o json 2>/dev/null | jq -r '[.[] | select(.status=="deployed")][-1].revision // empty' || true)
+            helm upgrade --install gridpulse deploy/helm/gridpulse -n "$namespace" --create-namespace \
+              -f deploy/helm/gridpulse/values-demo.yaml --set image.repository="$image" --set image.tag="$IMAGE_TAG" \
+              --set config.GRIDPULSE_MLFLOW_URI="$MLFLOW_URI" --set config.GRIDPULSE_MQTT_HOST="$MQTT_HOST" \
+              --set retraining.enabled=false --atomic --wait --timeout 5m
+            if ! kubectl -n "$namespace" exec deploy/gridpulse-api -- gridpulse smoke --url http://localhost:8000; then
+              if [ -n "$previous" ]; then helm rollback gridpulse "$previous" -n "$namespace" --wait; else helm uninstall gridpulse -n "$namespace"; fi
+              exit 1
+            fi
+          done

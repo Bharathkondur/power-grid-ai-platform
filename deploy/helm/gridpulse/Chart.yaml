@@ -1,0 +1,6 @@
+apiVersion: v2
+name: gridpulse
+description: Personal portfolio demand forecasting API and ingestion workloads
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

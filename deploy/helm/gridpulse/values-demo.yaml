@@ -1,0 +1,6 @@
+replicaCount: 2
+config:
+  GRIDPULSE_ENV: demo
+retraining:
+  enabled: true
+# Stop Compose's monitor scheduler before enabling this controller.

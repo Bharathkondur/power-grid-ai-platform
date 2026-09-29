@@ -1,0 +1,34 @@
+name: Controlled ML retraining
+on:
+  workflow_dispatch:
+    inputs:
+      trigger:
+        description: Training policy trigger
+        type: choice
+        options: [scheduled, quality]
+        default: quality
+# The weekly schedule is owned by the Helm CronJob or Compose scheduler, not a second controller.
+permissions:
+  contents: read
+concurrency:
+  group: gridpulse-model-promotion
+  cancel-in-progress: false
+jobs:
+  retrain:
+    environment: demo
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: {version: "0.8.22"}
+      - run: uv sync --frozen --no-dev
+      - name: Train candidate, validate and check deployed forecast
+        env:
+          GRIDPULSE_DATABASE_URL: ${{ secrets.GRIDPULSE_DATABASE_URL }}
+          GRIDPULSE_MLFLOW_URI: ${{ vars.MLFLOW_URI }}
+          GRIDPULSE_DATA_SOURCE: ${{ vars.DATA_SOURCE }}
+          GRIDPULSE_DEPLOYMENT_CHECK_URL: ${{ vars.API_URL }}
+          GRIDPULSE_ENV: demo
+          TRIGGER: ${{ inputs.trigger }}
+        run: uv run gridpulse retrain --trigger "$TRIGGER"

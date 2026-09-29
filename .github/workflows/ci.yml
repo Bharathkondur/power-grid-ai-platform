@@ -1,0 +1,74 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.22"
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check . && uv run ruff format --check .
+      - run: uv run pytest --junitxml=runtime/junit.xml
+      - run: uv run pip-audit --local --skip-editable
+      - uses: azure/setup-helm@v4.3.0
+        with:
+          version: v3.18.3
+      - run: helm lint deploy/helm/gridpulse
+      - name: Build application (does not train a release model)
+        run: docker build --build-arg VCS_REF=${{ github.sha }} -t gridpulse-ai:0.1.0 -f deploy/docker/Dockerfile .
+      - name: Scan image
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.63.0 image \
+            --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 gridpulse-ai:0.1.0
+      - name: Start isolated integration fixture
+        run: |
+          uv run python scripts/init_env.py
+          echo 'MLFLOW_ALLOWED_HOSTS=*' >> .env
+          docker compose up -d --wait --wait-timeout 180
+          docker compose exec -T api gridpulse smoke --url http://localhost:8000
+          docker compose exec -T prometheus promtool check config /etc/prometheus/prometheus.yml
+      - uses: helm/kind-action@v1.12.0
+        with:
+          install_only: true
+          version: v0.29.0
+      - name: Deploy test namespace and prove recovery
+        run: |
+          uv run python scripts/deploy_local.py --ci
+          uv run python scripts/k8s_recovery.py
+          kubectl --context kind-gridpulse -n gridpulse exec deploy/gridpulse-api -- gridpulse smoke --url http://localhost:8000
+      - name: Publish verified image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA}"
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker tag gridpulse-ai:0.1.0 "$image"
+          docker push "$image"
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: runtime/junit.xml
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --tail=80 api bootstrap ingestion
+      - name: Stop fixture
+        if: always()
+        run: docker compose down

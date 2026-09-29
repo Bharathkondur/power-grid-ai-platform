@@ -1,0 +1,33 @@
+{{- if .Values.ingestion.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-ingestion
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: {{ .Release.Name }}-ingestion}
+  template:
+    metadata:
+      labels: {app: {{ .Release.Name }}-ingestion}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001}
+      containers:
+        - name: ingestion
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: [gridpulse, mqtt, subscribe]
+          envFrom:
+            - configMapRef: {name: {{ .Release.Name }}-config}
+            - secretRef: {name: {{ .Values.existingSecret }}}
+          env:
+            - name: GRIDPULSE_MQTT_CLIENT_ID
+              value: {{ .Release.Name }}-k8s-ingestion
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts: [{name: runtime, mountPath: /app/runtime}]
+      volumes: [{name: runtime, emptyDir: {}}]
+{{- end }}

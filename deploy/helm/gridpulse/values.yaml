@@ -1,0 +1,36 @@
+image:
+  repository: gridpulse-ai
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+replicaCount: 1
+existingSecret: gridpulse-secrets
+config:
+  GRIDPULSE_ENV: demo
+  GRIDPULSE_MLFLOW_URI: http://host.docker.internal:5000
+  GRIDPULSE_DATA_SOURCE: synthetic
+  GRIDPULSE_MODEL_NAME: gridpulse-de-demand
+  GRIDPULSE_MODEL_ALIAS: champion
+  GRIDPULSE_MODEL_REFRESH_SECONDS: "5"
+  GRIDPULSE_MQTT_HOST: host.docker.internal
+  GRIDPULSE_MQTT_PORT: "1883"
+  GRIDPULSE_RUNTIME: /app/runtime
+  MLFLOW_DISABLE_AGENT_HINT: "1"
+resources:
+  requests: {cpu: 100m, memory: 256Mi}
+  limits: {cpu: "2", memory: 1Gi}
+ingestion:
+  enabled: true
+retraining:
+  enabled: false
+  schedule: "0 3 * * 1"
+monitor:
+  enabled: true
+  schedule: "*/5 * * * *"
+kubeStateMetrics:
+  enabled: false
+  image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.16.0
+  nodePort: 30080
+service:
+  type: ClusterIP
+  port: 8000
+  nodePort: 30000

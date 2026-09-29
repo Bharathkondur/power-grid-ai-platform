@@ -1,0 +1,37 @@
+{{- range $name, $job := dict "retraining" .Values.retraining "monitor" .Values.monitor }}
+{{- if $job.enabled }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $.Release.Name }}-{{ $name }}
+spec:
+  schedule: {{ $job.schedule | quote }}
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001}
+          containers:
+            - name: {{ $name }}
+              image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+              command: [gridpulse, {{ if eq $name "retraining" }}retrain, --trigger, scheduled{{ else }}monitor{{ end }}]
+              envFrom:
+                - configMapRef: {name: {{ $.Release.Name }}-config}
+                - secretRef: {name: {{ $.Values.existingSecret }}}
+              securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+              resources:
+                requests: {cpu: 200m, memory: 512Mi}
+                limits: {cpu: "2", memory: 2Gi}
+              volumeMounts: [{name: runtime, mountPath: /app/runtime}]
+          volumes: [{name: runtime, emptyDir: {}}]
+{{- end }}
+{{- end }}
